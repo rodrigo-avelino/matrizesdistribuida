@@ -1,0 +1,33 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Cache do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribuição / build
+build/
+dist/
+*.egg-info/
+
+# Resultados do benchmark (regeneráveis com `python benchmark.py`).
+# Se quiser versionar os gráficos/CSVs finais do relatório, comente a linha:
+resultados/
+
+# Claude Code
+.claude/
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+
+# Sistema operacional
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.DS_Store
