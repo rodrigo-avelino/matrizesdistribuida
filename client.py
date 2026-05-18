@@ -277,27 +277,36 @@ def _executar_com_ui(tamanho, paralelo, servidores_cli, host, porta_inicio,
                                     ao_despachar, ao_receber)
         live.update(tabela())
 
+    # O serial é calculado UMA única vez: serve de gabarito de corretude
+    # E, se --comparar, também de baseline cronometrado (antes ele rodava
+    # duas vezes — uma na verificação, outra na comparação).
+    ts = None
+    ok = None
+    if comparar:
+        with console.status("[cyan]Rodando serial (gabarito + baseline)..."):
+            t0 = time.perf_counter()
+            C_serial = multiplicar_serial(A, B)
+            ts = time.perf_counter() - t0
+        if verificar_resultado:
+            ok = (C == C_serial)
+    elif verificar_resultado:
+        ok = verificar(C, A, B)
+
     resumo = Table.grid(padding=(0, 2))
     resumo.add_column(justify="right", style="cyan")
     resumo.add_column()
     resumo.add_row("Dimensão de C", f"{len(C)} x {len(C[0])}")
     resumo.add_row("Tempo total distribuído", f'{m["tempo_total"]:.4f} s')
     resumo.add_row("Maior cálculo num nó", f'{m["tempo_max_servidor"]:.4f} s')
-    resumo.add_row("Overhead (rede+serial.)", f'{m["overhead"]:.4f} s')
-    if verificar_resultado:
-        ok = verificar(C, A, B)
+    resumo.add_row("Overhead (rede + serialização)", f'{m["overhead"]:.4f} s')
+    if ok is not None:
         resumo.add_row("Corretude (vs serial)",
                        "[bold green]CORRETO[/]" if ok else "[bold red]INCORRETO[/]")
     console.print(Panel(resumo, title="[bold]Resultado distribuído[/]",
                         border_style="green"))
 
-    # Demonstração ao vivo: roda serial e paralelo-local AGORA e compara.
     if comparar:
         td = m["tempo_total"]
-        with console.status("[cyan]Rodando serial localmente para comparar..."):
-            t0 = time.perf_counter()
-            multiplicar_serial(A, B)
-            ts = time.perf_counter() - t0
         nw = os.cpu_count() or 2
         with console.status(f"[cyan]Rodando paralelo-local ({nw} processos)..."):
             t0 = time.perf_counter()
@@ -314,6 +323,11 @@ def _executar_com_ui(tamanho, paralelo, servidores_cli, host, porta_inicio,
         comp.add_row(f"distribuído ({len(servidores)} nós)", f"{td:.4f}",
                      f"{ts / td:.2f}x" if td else "-")
         console.print(comp)
+        console.print("[dim]Comparação ilustrativa: cada servidor usa TODOS "
+                       "os núcleos (--workers), então 2 nós ≈ 2×N processos "
+                       "contra N do paralelo-local, e os Pools dos servidores "
+                       "já estão quentes (fora do tempo medido). Números "
+                       "controlados e justos: benchmark.py --server-workers 1.[/]")
 
     if tamanho <= 8:
         console.print("[dim]A =[/]", A)
