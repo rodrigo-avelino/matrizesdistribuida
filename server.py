@@ -189,11 +189,15 @@ def iniciar_servidor(host, porta_inicial, porta_fixa, quiet, n_workers):
                                       "cpus": os.cpu_count(),
                                       "workers": n_workers})
                     return
-                if tipo != "MULTIPLICAR":
+                if tipo != "MULTIPLICAR_V2":
                     enviar_msg(conn, {"tipo": "ERRO",
                                       "msg": f"tipo desconhecido: {tipo!r}"})
                     return
 
+                # MULTIPLICAR_V2 chega em DOIS frames: o primeiro (já lido)
+                # traz bloco_A e metadados; o segundo traz a matriz B (que o
+                # cliente pickla uma única vez e reusa entre todos os nós).
+                req["matriz_B"] = receber_msg(conn)
                 _set(status="calculando...")
                 bloco_C, t_calc = _processar(req, obter_pool, n_workers)
                 enviar_msg(conn, {

@@ -143,12 +143,23 @@ def descobrir_servidores(host="127.0.0.1", porta_inicio=5000, limite=10,
     return list(ativos)
 
 
-def _falar_com_servidor(host, porta, bloco_A, B, paralelo, linha_inicio):
+def _montar_frame_pre_picklado(corpo_bytes):
+    """Constrói um frame (cabeçalho de 8 bytes + corpo) a partir de bytes
+    JÁ picklados. Permite reusar a serialização de B entre todas as threads
+    sem repicklar (B é picklado uma única vez no chamador)."""
+    return _CAB.pack(len(corpo_bytes)) + corpo_bytes
+
+
+def _falar_com_servidor(host, porta, bloco_A, b_frame, paralelo, linha_inicio):
+    """Envia em DOIS frames consecutivos: Frame 1 = cabeçalho da requisição
+    (sem B, picklado por thread); Frame 2 = matriz B já picklada e enquadrada
+    (compartilhada entre todas as threads, sem repicklar)."""
     with socket.create_connection((host, porta)) as s:
         enviar_msg(s, {
-            "tipo": "MULTIPLICAR", "bloco_A": bloco_A, "matriz_B": B,
+            "tipo": "MULTIPLICAR_V2", "bloco_A": bloco_A,
             "paralelo": paralelo, "linha_inicio": linha_inicio,
         })
+        s.sendall(b_frame)
         return receber_msg(s)
 
 
@@ -165,6 +176,14 @@ def executar_distribuido(A, B, servidores, paralelo=True,
     n = len(servidores)
     fatias = dividir_linhas(len(A), n)
 
+    # Pickle B EXATAMENTE uma vez e reusa o mesmo bytes em todas as threads.
+    # Antes cada thread picklava B independentemente; como pickle.dumps segura
+    # o GIL para listas de inteiros Python, as N picklagens viravam sequenciais
+    # e dominavam o tempo de despacho. Agora elas viram um sendall puro de
+    # bytes prontos, que libera o GIL e finalmente paraleliza.
+    b_bytes = pickle.dumps(B, protocol=pickle.HIGHEST_PROTOCOL)
+    b_frame = _montar_frame_pre_picklado(b_bytes)
+
     resultados = {}
     por_servidor = []
     t0 = time.perf_counter()
@@ -174,7 +193,7 @@ def executar_distribuido(A, B, servidores, paralelo=True,
             if ao_despachar:
                 ao_despachar(idx, host, porta, ini, fim)
             fut = executor.submit(_falar_com_servidor, host, porta,
-                                   A[ini:fim], B, paralelo, ini)
+                                   A[ini:fim], b_frame, paralelo, ini)
             futuros[fut] = (idx, porta, fim - ini)
 
         for fut in concurrent.futures.as_completed(futuros):
