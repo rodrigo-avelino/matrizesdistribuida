@@ -281,20 +281,28 @@ def _executar_com_ui(tamanho, paralelo, servidores_cli, host, porta_inicio,
                       s["status"], str(s["tempo"]))
         return t
 
-    with Live(tabela(), console=console, refresh_per_second=8) as live:
+    # auto_refresh=False: SEM thread de redesenho de fundo. Em CPU híbrida
+    # (Intel 12a/13a/14a geração com P-cores e E-cores), o thread de refresh
+    # do rich Live mantinha o cliente "ativo" e o Windows Thread Director
+    # empurrava o subprocess servidor para os E-cores, deixando o cálculo
+    # do servidor até 3x mais lento. Atualizamos a tabela só em eventos
+    # (refresh=True nos callbacks) — o demo ao vivo continua animado, sem
+    # competir por núcleos durante o cálculo distribuído.
+    with Live(tabela(), console=console, refresh_per_second=8,
+              auto_refresh=False) as live:
         def ao_despachar(idx, h, p, ini, fim):
             estado[idx]["linhas"] = f"{ini}–{fim - 1}"
             estado[idx]["status"] = "[yellow]calculando...[/]"
-            live.update(tabela())
+            live.update(tabela(), refresh=True)
 
         def ao_receber(idx, resp):
             estado[idx]["status"] = "[green]concluído[/]"
             estado[idx]["tempo"] = f'{resp.get("tempo_calculo", 0):.4f}s'
-            live.update(tabela())
+            live.update(tabela(), refresh=True)
 
         C, m = executar_distribuido(A, B, servidores, paralelo,
                                     ao_despachar, ao_receber)
-        live.update(tabela())
+        live.update(tabela(), refresh=True)
 
     # O serial é calculado UMA única vez: serve de gabarito de corretude
     # E, se --comparar, também de baseline cronometrado (antes ele rodava
