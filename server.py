@@ -256,12 +256,18 @@ class _UI:
                      border_style="green")
 
     def start(self):
-        self._live = self._Live(self._render(), refresh_per_second=8, screen=False)
+        # auto_refresh=False: SEM thread de redesenho de fundo. Em CPU
+        # híbrida (P-cores + E-cores), esse thread mantinha o servidor
+        # "ativo" e o Thread Director o puxava para P-cores, mas também
+        # disputava o GIL com o cálculo, podendo deixá-lo mais lento.
+        # Atualizamos apenas em eventos (refresh=True na refresh()).
+        self._live = self._Live(self._render(), refresh_per_second=8,
+                                screen=False, auto_refresh=False)
         self._live.start()
 
     def refresh(self):
         if self._live:
-            self._live.update(self._render())
+            self._live.update(self._render(), refresh=True)
 
     def stop(self):
         if self._live:
