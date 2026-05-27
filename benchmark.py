@@ -199,17 +199,19 @@ def rodar(sizes, repeats, warmup, server_counts, server_workers,
     total = len(sizes) * (warmup + repeats) * por_passada
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
                   BarColumn(), TextColumn("{task.completed}/{task.total}"),
-                  TimeElapsedColumn(), console=console) as prog:
+                  TimeElapsedColumn(), console=console, auto_refresh=False) as prog:
         tarefa = prog.add_task("medindo...", total=total)
         for tamanho in sizes:
             for passo in range(warmup + repeats):
                 gravar = passo >= warmup
                 rotulo = "warmup" if not gravar else f"rep {passo - warmup + 1}"
                 prog.update(tarefa, description=f"N={tamanho} {rotulo}")
+                prog.refresh()
                 _uma_passada(tamanho, passo, server_counts, server_workers,
                              local_workers, host, gravar, brutos,
                              external_pool)
                 prog.advance(tarefa, por_passada)
+                prog.refresh()
 
     _exportar(brutos, out, console)
     return brutos
